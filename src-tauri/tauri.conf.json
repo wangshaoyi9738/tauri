@@ -1,5 +1,5 @@
 {
-  "productName": "tauri",
+  "productName": "tauri-app",
   "version": "0.0.1",
   "identifier": "com.xiaomi.dev",
   "build": {
@@ -11,7 +11,7 @@
   "app": {
     "windows": [
       {
-        "title": "tauri",
+        "title": "tauri-app",
         "width": 800,
         "height": 600
       }
@@ -30,5 +30,5 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
-  },
+  }
 }
