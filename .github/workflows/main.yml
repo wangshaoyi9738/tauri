@@ -1,7 +1,7 @@
-name: Manual Publish
+name: "publish"
 
 on:
-  workflow_dispatch: # 手动触发方式
+  workflow_dispatch:  # 手动触发事件
 
 jobs:
   create-release:
@@ -18,10 +18,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: lts/*
-          registry-url: 'https://registry.npmjs.org' # 设置 npm 注册表为 npmjs.org
 
       - name: get version
-        run: echo "PACKAGE_VERSION=$(node -p "require('./package.json').version")" >> $GITHUB_ENV
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "PACKAGE_VERSION=$VERSION" >> $GITHUB_ENV
 
       - name: create release
         id: create-release
@@ -49,12 +50,16 @@ jobs:
         include:
           - platform: "macos-latest" # for Arm based macs (M1 and above).
             args: "--target aarch64-apple-darwin"
+            rust_target: "aarch64-apple-darwin"
           - platform: "macos-latest" # for Intel based macs.
             args: "--target x86_64-apple-darwin"
-          - platform: "ubuntu-22.04" # for Tauri v1 you could replace this with ubuntu-20.04.
+            rust_target: "x86_64-apple-darwin"
+          - platform: "ubuntu-latest" # for Tauri v1 you could replace this with ubuntu-20.04.
             args: ""
+            rust_target: ""
           - platform: "windows-latest"
             args: ""
+            rust_target: ""
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -64,25 +69,31 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: lts/*
-          registry-url: 'https://registry.npmjs.org' # 设置 npm 注册表为 npmjs.org
 
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: install specific Rust target for macOS
+        if: matrix.platform == 'macos-latest'
+        run: rustup target add ${{ matrix.rust_target }}
+
+      - name: install pnpm
+        run: npm install -g pnpm
 
       - name: install dependencies (ubuntu only)
-        if: matrix.platform == 'ubuntu-22.04'
+        if: matrix.platform == 'ubuntu-latest'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.0-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
       - name: install frontend dependencies
-        run: pnpm install # 使用 pnpm 安装依赖
+        run: pnpm install
 
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           releaseId: ${{ needs.create-release.outputs.release_id }}
           args: ${{ matrix.args }}
@@ -97,14 +108,12 @@ jobs:
       - name: publish release
         id: publish-release
         uses: actions/github-script@v6
-        env:
-          release_id: ${{ needs.create-release.outputs.release_id }}
         with:
           script: |
-            github.rest.repos.updateRelease({
+            await github.rest.repos.updateRelease({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              release_id: process.env.release_id,
+              release_id: ${{ needs.create-release.outputs.release_id }},
               draft: false,
               prerelease: false
             })
